@@ -1,0 +1,32 @@
+name: IFC Validation
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-ifc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install ifcopenshell
+        run: |
+          pip install pytest
+          pip install ifcopenshell
+
+      - name: Run IFC lint checks
+        run: |
+          set -e
+          shopt -s globstar nullglob
+          for file in **/*.ifc; do
+            echo "Validating $file..."
+            python3 -m ifcopenshell.validate --rules "$file"
+          done

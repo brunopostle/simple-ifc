@@ -1,0 +1,88 @@
+name: IDS Compliance Check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ids-lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install ifctester and idssplit
+        run: |
+          pip install ifctester
+          pip install --no-deps https://github.com/brunopostle/idssplit/releases/download/0.1.0/idssplit-0.1.0-py3-none-any.whl
+
+      - name: Run IDS validations
+        run: |
+          set -e
+          shopt -s globstar nullglob
+
+          if [ ! -d IDS ]; then
+            echo "No IDS/ folder found"
+            exit 0
+          fi
+
+          ids_sources=(IDS/**/*.ids)
+
+          if [ ${#ids_sources[@]} -eq 0 ]; then
+            echo "No IDS files found in IDS/ folder"
+            exit 0
+          fi
+
+          ifc_files=(**/*.ifc)
+
+          if [ ${#ifc_files[@]} -eq 0 ]; then
+            echo "No IFC files found"
+            exit 0
+          fi
+
+          mkdir -p split_ids
+
+          echo "Splitting IDS files..."
+          for ids in "${ids_sources[@]}"; do
+            idssplit "$ids" split_ids/
+          done
+
+          split_ids_files=(split_ids/*.ids)
+          if [ ${#split_ids_files[@]} -eq 0 ]; then
+            echo "No rules found after splitting IDS files"
+            exit 1
+          fi
+
+          echo "Running ifctester validations..."
+          failed=0
+
+          for rule_ids in "${split_ids_files[@]}"; do
+            for ifc in "${ifc_files[@]}"; do
+              echo "::group::Test: $rule_ids with $ifc"
+              echo "Testing: $rule_ids with $ifc"
+              output=$(python3 -m ifctester --no-color "$rule_ids" "$ifc" || true)
+              echo "$output"
+              echo "::endgroup::"
+
+              if echo "$output" | grep -q '\[FAIL\]'; then
+                echo "FAIL: $rule_ids with $ifc"
+                failed=1
+              else
+                echo "PASS: $rule_ids with $ifc"
+              fi
+            done
+          done
+
+          if [ "$failed" -ne 0 ]; then
+            echo "One or more validations failed"
+            exit 1
+          else
+            echo "All validations passed"
+          fi
