@@ -325,6 +325,126 @@ ifc_edit("attribute.edit_attributes", '{"product": "123", "attributes": "{\"Sche
 
 ---
 
+## Bill of Quantities (BoQ)
+
+### Concepts
+
+IFC separates **quantities** (how much) from **pricing** (how much it costs). They are independent layers:
+
+- **Quantities** live on elements as `IfcElementQuantity` property sets (written by `ifc_quantify`). These must exist before building a cost schedule.
+- **Pricing** lives in a separate `IfcCostSchedule` → `IfcCostItem` tree. Unit rates are stored on `IfcCostValue` entities attached to cost items, not on elements.
+- At BoQ generation time, a tool multiplies `unit rate × quantity` to compute line-item totals.
+- The same element can appear in multiple cost schedules with different rates; rates can be updated without touching geometry.
+
+### Cost schedule structure
+
+```
+IfcCostSchedule  "Bill of Quantities"  (predefined_type: COSTPLAN or PRICEDBILLOFQUANTITIES)
+  └─ IfcCostItem  "A - Substructure"   (section/summary — has IfcCostValue with Category="*")
+       ├─ IfcCostItem  "A.1 - Ground Beams"  (leaf — has IfcCostValue with unit rate)
+       │    linked to IfcFooting elements via IfcRelAssignsToControl
+       └─ IfcCostItem  "A.2 - Floor Slab"
+            linked to IfcSlab elements via IfcRelAssignsToControl
+```
+
+Elements are linked to cost items via `assign_cost_item_quantity`, which also creates the `IfcRelAssignsToControl` relationship automatically.
+
+### Quantity names by element type
+
+| Element | Useful quantity names |
+|---|---|
+| IfcWall, IfcSlab, IfcFooting | `NetVolume`, `GrossVolume` |
+| IfcWindow, IfcDoor | `Area` |
+| IfcRoof, IfcCovering | `GrossArea`, `NetArea` |
+| IfcPipeSegment | `Length` |
+
+### MCP recipe — creating a BoQ from scratch
+
+```
+# 1. Ensure quantities are computed first
+ifc_quantify("IFC4QtoBaseQuantities")
+
+# 2. Create the cost schedule
+ifc_edit("cost.add_cost_schedule", '{"name": "Bill of Quantities", "predefined_type": "COSTPLAN"}')
+# → returns IfcCostSchedule id (e.g. 100)
+
+# 3. Create section (summary) items at top level
+ifc_edit("cost.add_cost_item", '{"cost_schedule": "100"}')
+# → returns IfcCostItem id (e.g. 101)
+ifc_edit("cost.edit_cost_item", '{"cost_item": "101", "attributes": "{\"Name\": \"Substructure\", \"Identification\": \"A\"}"}')
+
+# 4. Create leaf items under a section
+ifc_edit("cost.add_cost_item", '{"cost_item": "101"}')
+# → returns id (e.g. 102)
+ifc_edit("cost.edit_cost_item", '{"cost_item": "102", "attributes": "{\"Name\": \"Ground Beams\", \"Identification\": \"A.1\"}"}')
+
+# 5. Link elements parametrically — quantities update automatically if geometry changes
+ifc_edit("cost.assign_cost_item_quantity", '{"cost_item": "102", "products": "10,11,12,13", "prop_name": "NetVolume"}')
+
+# 6. Add a unit rate to the leaf item
+ifc_edit("cost.add_cost_value", '{"parent": "102"}')
+# → returns IfcCostValue id (e.g. 200)
+ifc_edit("cost.edit_cost_value", '{"cost_value": "200", "attributes": "{\"AppliedValue\": 350.0}"}')
+
+# 7. Add a sum value to section items (Category="*" marks it as a subtotal)
+#    This is required for PDF export — compute total = sum(quantity × rate) for each section
+ifc_edit("cost.add_cost_value", '{"parent": "101"}')
+# → returns id (e.g. 201)
+ifc_edit("cost.edit_cost_value", '{"cost_value": "201", "attributes": "{\"Category\": \"*\", \"AppliedValue\": 2500.0}"}')
+
+# 8. Verify and save
+ifc_cost()
+ifc_validate()
+ifc_save()
+```
+
+### Key API notes
+
+- `cost.add_cost_item` accepts no `name` parameter — set name afterwards with `cost.edit_cost_item`
+- `cost.edit_cost_item` and `cost.edit_cost_value` require `attributes` as a **JSON string** (not a dict):
+  ```
+  '{"attributes": "{\"Name\": \"Ground Beams\"}"}'   # correct — double-encoded
+  '{"attributes": {"Name": "Ground Beams"}}'          # WRONG — will error
+  ```
+- `assign_cost_item_quantity` with `prop_name=""` counts elements instead of summing a named quantity
+- `AppliedValue` accepts a plain float (stored as `IfcMonetaryMeasure`)
+
+### Section items MUST have Category="*" cost values
+
+Section/summary items with no quantities and no `Category="*"` cost value have `ItemIsASum=False` in the export. This causes the PDF exporter to try parsing their empty `Quantity` field as a float and crash. Every section item must have an `IfcCostValue` with `Category="*"` and `AppliedValue` set to the pre-computed section total.
+
+### Exporting to PDF
+
+The `ifc5d` PDF writer produces the best-looking output. The format flag requires **uppercase**:
+
+```bash
+# PDF — invoke directly (not wired into the CLI format switch)
+python3 -c "
+import ifcopenshell
+from ifc5d.ifc5Dspreadsheet import Ifc5DPdfWriter
+f = ifcopenshell.open('model.ifc')
+cs = next(iter(f.by_type('IfcCostSchedule')))
+Ifc5DPdfWriter(file=f, output='boq.pdf', options={}, cost_schedule=cs,
+               force_schedule_type='PRICEDBILLOFQUANTITIES').write()
+"
+
+# XLSX (via CLI — uppercase format required)
+python3 -m ifc5d.ifc5Dspreadsheet -f XLSX model.ifc ./output_dir/
+
+# CSV
+python3 -m ifc5d.ifc5Dspreadsheet -f CSV model.ifc ./output_dir/
+```
+
+**Requires `typst` for PDF:** `pip install typst`
+
+**Known ifc5d limitations:**
+- The `-f` flag is case-sensitive: `XLSX`, `CSV`, `ODS` (lowercase silently fails with `NameError: writer`)
+- PDF is not in the CLI format switch — must be called directly from Python (see above)
+- XLSX/CSV `TotalPrice` column is always 0 for unit-rate items; totals are only computed as spreadsheet formulas in the ODS writer (which has a column-name bug), and at render time in the typst PDF template
+- The typst PDF template computes `Total = Quantity × RateSubtotal` for leaf items; for section items it reads `TotalPrice` from the `Category="*"` cost value
+
+---
+
 ## Validation and CI/CD
 
 ### Manual validation
