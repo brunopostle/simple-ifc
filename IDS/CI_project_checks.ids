@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ids xmlns:xs="http://www.w3.org/2001/XMLSchema"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xmlns="http://standards.buildingsmart.org/IDS">
+  <info>
+    <title>CI Project Checks</title>
+    <description>Checks derived from BoQ, QTO, and scheduling requirements for this project.
+      QTO checks: verifies ifc_quantify has been run and quantities are present for all BoQ cost
+      item links. Scheduling checks: verifies elements are named so schedule task descriptions and
+      BoQ Quantities column are meaningful. BoQ property checks: verifies structural and energy
+      properties needed for cost planning and energy analysis are present.</description>
+    <date>2026-02-24</date>
+    <purpose>CI validation — run on every commit to main</purpose>
+  </info>
+  <specifications>
+
+    <!-- ================================================================
+         QTO CHECKS
+         The BoQ uses parametric quantity links (assign_cost_item_quantity)
+         that reference named quantities on elements. If ifc_quantify has
+         not been run (or its output was not saved), these links produce
+         zero quantities and all BoQ line-item totals collapse to zero.
+         ================================================================ -->
+
+    <specification name="(QTO-1) Wall net volumes computed"
+                   description="Qto_WallBaseQuantities.NetVolume must be present on all IfcWall instances. This quantity is the basis for the BoQ 'Exterior Walls' cost item. Run ifc_quantify('IFC4QtoBaseQuantities') and save before committing."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <entity>
+          <name><simpleValue>IFCWALL</simpleValue></name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property>
+          <propertySet><simpleValue>Qto_WallBaseQuantities</simpleValue></propertySet>
+          <baseName><simpleValue>NetVolume</simpleValue></baseName>
+        </property>
+      </requirements>
+    </specification>
+
+    <specification name="(QTO-2) Slab net volumes computed"
+                   description="Qto_SlabBaseQuantities.NetVolume must be present on all IfcSlab instances. This quantity is the basis for the BoQ 'Floor Slab' cost item."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <entity>
+          <name><simpleValue>IFCSLAB</simpleValue></name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property>
+          <propertySet><simpleValue>Qto_SlabBaseQuantities</simpleValue></propertySet>
+          <baseName><simpleValue>NetVolume</simpleValue></baseName>
+        </property>
+      </requirements>
+    </specification>
+
+    <specification name="(QTO-3) Footing net volumes computed"
+                   description="Qto_FootingBaseQuantities.NetVolume must be present on all IfcFooting instances. This quantity is the basis for the BoQ 'Ground Beams' cost item."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <entity>
+          <name><simpleValue>IFCFOOTING</simpleValue></name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property>
+          <propertySet><simpleValue>Qto_FootingBaseQuantities</simpleValue></propertySet>
+          <baseName><simpleValue>NetVolume</simpleValue></baseName>
+        </property>
+      </requirements>
+    </specification>
+
+    <specification name="(QTO-4) Roof gross areas computed"
+                   description="Qto_RoofBaseQuantities.GrossArea must be present on all IfcRoof instances. This quantity is the basis for the BoQ 'Pitched Roof Structure' cost item."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <entity>
+          <name><simpleValue>IFCROOF</simpleValue></name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property>
+          <propertySet><simpleValue>Qto_RoofBaseQuantities</simpleValue></propertySet>
+          <baseName><simpleValue>GrossArea</simpleValue></baseName>
+        </property>
+      </requirements>
+    </specification>
+
+    <specification name="(QTO-5) Window areas computed"
+                   description="Qto_WindowBaseQuantities.Area must be present on all IfcWindow instances. This quantity is the basis for the BoQ 'Exterior Windows' cost item."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <entity>
+          <name><simpleValue>IFCWINDOW</simpleValue></name>
+        </entity>
+      </applicability>
+      <requirements>
+        <property>
+          <propertySet><simpleValue>Qto_WindowBaseQuantities</simpleValue></propertySet>
+          <baseName><simpleValue>Area</simpleValue></baseName>
+        </property>
+      </requirements>
+    </specification>
+
+    <!-- ================================================================
+         SCHEDULING CHECKS
+         Construction tasks are assigned to physical elements. Element
+         names appear in the schedule task descriptions and in the BoQ
+         Quantities column (e.g. "exterior - NetVolume"). Unnamed elements
+         produce meaningless schedule and BoQ output.
+         ================================================================ -->
+
+    <specification name="(SCHED-1) Walls are named"
+                   description="All IfcWall instances must have a Name. Wall names appear in the BoQ Quantities column and construction schedule task descriptions. Unnamed walls make the schedule and BoQ unreadable."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <entity>
+          <name><simpleValue>IFCWALL</simpleValue></name>
+        </entity>
+      </applicability>
+      <requirements>
+        <attribute>
+          <name><simpleValue>Name</simpleValue></name>
+          <value>
+            <xs:restriction base="xs:string">
+              <xs:pattern value=".+"/>
+            </xs:restriction>
+          </value>
+        </attribute>
+      </requirements>
+    </specification>
+
+    <specification name="(SCHED-2) Windows are named"
+                   description="All IfcWindow instances must have a Name. Window names appear in the BoQ Quantities column and construction schedule task descriptions."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <entity>
+          <name><simpleValue>IFCWINDOW</simpleValue></name>
+        </entity>
+      </applicability>
+      <requirements>
+        <attribute>
+          <name><simpleValue>Name</simpleValue></name>
+          <value>
+            <xs:restriction base="xs:string">
+              <xs:pattern value=".+"/>
+            </xs:restriction>
+          </value>
+        </attribute>
+      </requirements>
+    </specification>
+
+    <specification name="(SCHED-3) Footings are named"
+                   description="All IfcFooting instances must have a Name. Footing names appear in the BoQ Quantities column and construction schedule task descriptions."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <entity>
+          <name><simpleValue>IFCFOOTING</simpleValue></name>
+        </entity>
+      </applicability>
+      <requirements>
+        <attribute>
+          <name><simpleValue>Name</simpleValue></name>
+          <value>
+            <xs:restriction base="xs:string">
+              <xs:pattern value=".+"/>
+            </xs:restriction>
+          </value>
+        </attribute>
+      </requirements>
+    </specification>
+
+    <!-- ================================================================
+         BOQ PROPERTY CHECKS
+         These properties are required for the cost planning and energy
+         analysis that underpins the BoQ unit rates. Missing properties
+         mean rates cannot be properly justified or audited.
+         ================================================================ -->
+
+    <specification name="(BOQ-1) Load-bearing walls have fire rating"
+                   description="All load-bearing walls must have FireRating in Pset_WallCommon. Fire rating drives the cost of fire protection measures and is a mandatory input for building regulation compliance checks that feed into the BoQ."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <property>
+          <propertySet><simpleValue>Pset_WallCommon</simpleValue></propertySet>
+          <baseName><simpleValue>LoadBearing</simpleValue></baseName>
+          <value><simpleValue>True</simpleValue></value>
+        </property>
+      </applicability>
+      <requirements>
+        <property>
+          <propertySet><simpleValue>Pset_WallCommon</simpleValue></propertySet>
+          <baseName><simpleValue>FireRating</simpleValue></baseName>
+        </property>
+      </requirements>
+    </specification>
+
+    <specification name="(BOQ-2) Load-bearing walls have material assigned"
+                   description="All load-bearing walls must have a material assignment. Without a material (with density), ifc_quantify cannot compute NetWeight. Missing weight quantities cause the structural BoQ section to be incomplete and prevent weight-based cost checking."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <property>
+          <propertySet><simpleValue>Pset_WallCommon</simpleValue></propertySet>
+          <baseName><simpleValue>LoadBearing</simpleValue></baseName>
+          <value><simpleValue>True</simpleValue></value>
+        </property>
+      </applicability>
+      <requirements>
+        <material/>
+      </requirements>
+    </specification>
+
+    <specification name="(BOQ-3) External walls have thermal transmittance"
+                   description="All external walls must have ThermalTransmittance (U-value) in Pset_WallCommon. The U-value is used in energy analysis to justify the insulation specification and unit rate in the BoQ."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <property>
+          <propertySet><simpleValue>Pset_WallCommon</simpleValue></propertySet>
+          <baseName><simpleValue>IsExternal</simpleValue></baseName>
+          <value><simpleValue>True</simpleValue></value>
+        </property>
+      </applicability>
+      <requirements>
+        <property>
+          <propertySet><simpleValue>Pset_WallCommon</simpleValue></propertySet>
+          <baseName><simpleValue>ThermalTransmittance</simpleValue></baseName>
+        </property>
+      </requirements>
+    </specification>
+
+    <specification name="(BOQ-4) External windows have thermal transmittance"
+                   description="All external windows must have ThermalTransmittance (U-value) in Pset_WindowCommon. The U-value drives the glazing specification and unit rate in the BoQ 'Exterior Windows' cost item."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <property>
+          <propertySet><simpleValue>Pset_WindowCommon</simpleValue></propertySet>
+          <baseName><simpleValue>IsExternal</simpleValue></baseName>
+          <value><simpleValue>True</simpleValue></value>
+        </property>
+      </applicability>
+      <requirements>
+        <property>
+          <propertySet><simpleValue>Pset_WindowCommon</simpleValue></propertySet>
+          <baseName><simpleValue>ThermalTransmittance</simpleValue></baseName>
+        </property>
+      </requirements>
+    </specification>
+
+    <specification name="(BOQ-5) External roofs have thermal transmittance"
+                   description="All external roofs must have ThermalTransmittance (U-value) in Pset_RoofCommon. The U-value drives the roof insulation specification and unit rate in the BoQ 'Pitched Roof Structure' cost item."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <property>
+          <propertySet><simpleValue>Pset_RoofCommon</simpleValue></propertySet>
+          <baseName><simpleValue>IsExternal</simpleValue></baseName>
+          <value><simpleValue>True</simpleValue></value>
+        </property>
+      </applicability>
+      <requirements>
+        <property>
+          <propertySet><simpleValue>Pset_RoofCommon</simpleValue></propertySet>
+          <baseName><simpleValue>ThermalTransmittance</simpleValue></baseName>
+        </property>
+      </requirements>
+    </specification>
+
+  </specifications>
+</ids>
