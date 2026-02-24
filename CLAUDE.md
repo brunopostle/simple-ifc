@@ -498,6 +498,29 @@ Use `should_purge: false` to add/update properties without removing existing one
 
 **Known ifctester quirk with boolean applicability filters:** ifctester may flag elements even when their boolean property value does not match the applicability filter (e.g., an `IsExternal=True` wall being matched by an `IsExternal=False` filter). Treat the reported failing elements as authoritative — add whatever the requirement asks for, regardless of whether the applicability logic seems correct.
 
+**`<simpleValue>?</simpleValue>` is NOT a wildcard in ifctester — it matches the literal string `"?"`.**
+To check that an attribute has any non-empty value, use an `xs:restriction` pattern instead:
+
+```xml
+<!-- WRONG — matches only the literal string "?" -->
+<attribute>
+  <name><simpleValue>Name</simpleValue></name>
+  <value><simpleValue>?</simpleValue></value>
+</attribute>
+
+<!-- CORRECT — matches any non-empty string -->
+<attribute>
+  <name><simpleValue>Name</simpleValue></name>
+  <value>
+    <xs:restriction base="xs:string">
+      <xs:pattern value=".+"/>
+    </xs:restriction>
+  </value>
+</attribute>
+```
+
+This applies to `<attribute>` requirements. The `xmlns:xs="http://www.w3.org/2001/XMLSchema"` namespace must be declared on the root `<ids>` element (it is in the standard IDS template).
+
 ### ifcopenshell.validate
 
 Lower-level programmatic validation:
