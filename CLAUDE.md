@@ -470,6 +470,34 @@ python3 -m ifctester <ids_file> <ifc_file>
 
 IDS checks are typically run in CI on every commit or pull request.
 
+**Reading ifctester output:**
+- `[PASS] (0/0)` — no elements matched the applicability filter; check trivially passes (`minOccurs="0"`)
+- `[PASS] (5/5)` — 5 elements matched and all 5 passed the requirement
+- `[FAIL] (0/5)` — 5 elements matched but none passed; the failure lines list each failing element
+
+**IDS structure:** each specification has two parts:
+- `<applicability>` — filter selecting which elements the check applies to (AND logic across multiple facets)
+- `<requirements>` — what those elements must have (property name, value, pset name)
+
+**Fixing IDS failures — workflow:**
+
+1. Read the IDS file to understand exactly what property name, pset name, and value are required
+2. Use `ifc_info(<element_id>)` to inspect the failing element's current property sets
+3. Note whether multiple elements share the same `IfcPropertySet` entity (same `id`) — editing it once fixes all of them
+4. Use `pset.edit_pset` to add missing properties:
+
+```
+ifc_edit("pset.edit_pset", '{"pset": "<pset_id>", "properties": "{\"FireRating\": \"30\"}", "should_purge": "false"}')
+```
+
+Use `should_purge: false` to add/update properties without removing existing ones.
+
+**Critical: IDS property names are exact string matches.** A property named `Thermal Transmitance` (space, single-t) is entirely different from the IFC standard `ThermalTransmittance`. Always copy property names character-for-character from the IDS `<baseName>` element — do not assume they match standard IFC pset property names.
+
+**Shared psets:** in IFC, multiple elements (instances and their type) often share the same `IfcPropertySet` entity via `IfcRelDefinesByProperties`. Check the `"id"` field in `ifc_info` property set output — if 4 walls and a WallType all show the same pset id, one `pset.edit_pset` call fixes all of them simultaneously.
+
+**Known ifctester quirk with boolean applicability filters:** ifctester may flag elements even when their boolean property value does not match the applicability filter (e.g., an `IsExternal=True` wall being matched by an `IsExternal=False` filter). Treat the reported failing elements as authoritative — add whatever the requirement asks for, regardless of whether the applicability logic seems correct.
+
 ### ifcopenshell.validate
 
 Lower-level programmatic validation:
