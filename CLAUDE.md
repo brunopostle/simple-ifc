@@ -599,6 +599,8 @@ IFC files use STEP Physical File format — plain text, one entity per line — 
 
 `.gitattributes` is already committed to this repo with `*.ifc merge=ifcmerge`.
 
+**Warning:** if `.gitattributes` is not in place (or the merge driver is not configured) when branches are merged, git's standard text merge will silently drop new entities from one branch when two branches have both added entities starting at the same step ID. Always confirm the merge driver is configured before merging IFC branches.
+
 Add the driver to `.git/config` or `~/.gitconfig`:
 ```
 [merge "ifcmerge"]
