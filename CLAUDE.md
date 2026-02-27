@@ -264,7 +264,7 @@ Physical elements are linked to tasks via `IfcRelAssignsToProcess`. Task orderin
 ```
 # Work plan and schedule
 ifc_edit("sequence.add_work_plan", '{"name": "Construction Plan", "predefined_type": "ACTUAL"}')
-ifc_edit("sequence.add_work_schedule", '{"name": "Construction Schedule", "predefined_type": "BASELINE", "work_plan": "<plan_id>"}')
+ifc_edit("sequence.add_work_schedule", '{"name": "Construction Schedule", "predefined_type": "PLANNED", "work_plan": "<plan_id>"}')
 
 # Phase (summary) tasks
 ifc_edit("sequence.add_task", '{"work_schedule": "<sched_id>", "name": "Foundations", "identification": "P1", "predefined_type": "CONSTRUCTION"}')
