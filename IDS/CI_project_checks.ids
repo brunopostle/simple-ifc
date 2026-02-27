@@ -110,6 +110,22 @@
          produce meaningless schedule and BoQ output.
          ================================================================ -->
 
+    <specification name="(SCHED-0) Work schedule type is PLANNED"
+                   description="IfcWorkSchedule.PredefinedType must be PLANNED. Bonsai's Gantt chart code special-cases BASELINE schedules by following IsDeclaredBy[0].RelatingObject to find a parent comparison schedule. A standalone schedule has no such relationship, causing an IndexError that silently prevents the Gantt from rendering. PLANNED is the correct type for a forward-looking construction programme; BASELINE is reserved for frozen comparison snapshots declared from a parent schedule."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="1">
+        <entity>
+          <name><simpleValue>IFCWORKSCHEDULE</simpleValue></name>
+        </entity>
+      </applicability>
+      <requirements>
+        <attribute>
+          <name><simpleValue>PredefinedType</simpleValue></name>
+          <value><simpleValue>PLANNED</simpleValue></value>
+        </attribute>
+      </requirements>
+    </specification>
+
     <specification name="(SCHED-1) Walls are named"
                    description="All IfcWall instances must have a Name. Wall names appear in the BoQ Quantities column and construction schedule task descriptions. Unnamed walls make the schedule and BoQ unreadable."
                    ifcVersion="IFC4">
