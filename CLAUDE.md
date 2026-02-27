@@ -203,6 +203,24 @@ ifc_edit("attribute.edit_attributes", '{"product": "<id>", "attributes": "{\"Dep
 
 Note the nested JSON: `params` is a JSON string and `attributes` within it is also a JSON string.
 
+### Resizing element geometry
+
+`attribute.edit_attributes` on `IfcCartesianPointList2D.CoordList` fails with a type error (expects `AGGREGATE OF AGGREGATE OF DOUBLE`, gets `list`). To resize a slab/extrusion, remove and recreate the representation instead:
+
+```
+# 1. Unassign and remove old representation
+ifc_edit("geometry.unassign_representation", '{"product": "<element_id>", "representation": "<rep_id>"}')
+ifc_edit("geometry.remove_representation", '{"representation": "<rep_id>"}')
+
+# 2. Create new representation with correct dimensions
+ifc_edit("geometry.add_slab_representation", '{"context": "11", "depth": 0.8, "polyline": "[[0,0],[0.6,0],[0.6,0.5],[0,0.5]]"}')
+
+# 3. Assign new representation
+ifc_edit("geometry.assign_representation", '{"product": "<element_id>", "representation": "<new_rep_id>"}')
+```
+
+Note: the `polyline` parameter must be passed as a **JSON string** (not a bare array).
+
 ### Tracing geometry chains
 
 Walk entity references to find extrusion depths, clipping planes, etc.:
@@ -531,6 +549,46 @@ python3 -c "import ifcopenshell; import ifcopenshell.validate; f = ifcopenshell.
 
 ---
 
+## Bonsai Asset Libraries
+
+Bonsai ships IFC4 asset libraries at:
+```
+/usr/lib/python3.14/site-packages/bonsai/bim/data/libraries/
+```
+
+Key libraries:
+- `IFC4 Furniture Library.ifc` — 150 `IfcFurnitureType` entries (beds, chairs, sofas, tables, desks, kitchen units, etc.)
+- `IFC4 Landscape Library.ifc` — 66 `IfcGeographicElementType` entries (Apple, Round Tree, Conical Tree Small (5m), Shrub, etc.)
+- `IFC4 Entourage Library.ifc` — `IfcBuildingElementProxyType` people figures
+
+### Appending a library type
+
+Use `ifc_edit("project.append_asset", ...)` via MCP if available. At the time of writing, the MCP coercion layer had no handler for `ifcopenshell.file`-typed parameters, so the `library` argument could not be passed through `ifc_edit` — this may have since been fixed in ifcedit/ifcmcp. If MCP does not work, fall back to Python:
+
+```python
+import ifcopenshell, ifcopenshell.api.project, ifcopenshell.api.type
+
+LIB = '/usr/lib/python3.14/site-packages/bonsai/bim/data/libraries/IFC4 Landscape Library.ifc'
+f   = ifcopenshell.open('model.ifc')
+lib = ifcopenshell.open(LIB)
+
+# Find the type in the library
+apple_type_in_lib = next(t for t in lib.by_type('IfcGeographicElementType') if t.Name == 'Apple')
+
+# Copy into the model — returns the new type entity in f
+apple = ifcopenshell.api.project.append_asset(f, library=lib, element=apple_type_in_lib)
+
+# Assign to an occurrence
+tree = f.by_id(<tree_element_id>)
+ifcopenshell.api.type.assign_type(f, related_objects=[tree], relating_type=apple)
+
+f.write('model.ifc')
+```
+
+`append_asset` copies all dependent geometry, materials, and styles. The occurrence keeps its own name, placement, and properties while getting the type's geometry.
+
+---
+
 ## Git Workflow
 
 IFC files use STEP Physical File format — plain text, one entity per line — which is natively git-friendly. Commits, diffs, rollbacks, and blame all work as expected.
@@ -539,16 +597,13 @@ IFC files use STEP Physical File format — plain text, one entity per line — 
 
 ### Configuring ifcmerge
 
-In `.gitattributes`:
-```
-*.ifc merge=ifcmerge
-```
+`.gitattributes` is already committed to this repo with `*.ifc merge=ifcmerge`.
 
-In `.git/config` or `~/.gitconfig`:
+Add the driver to `.git/config` or `~/.gitconfig`:
 ```
 [merge "ifcmerge"]
     name = IFC merge driver
-    driver = ifcmerge %O %A %B %P
+    driver = /home/bruno/src/ifcmerge/ifcmerge %O %A %B %P
 ```
 
 ### ifcmerge behaviour
