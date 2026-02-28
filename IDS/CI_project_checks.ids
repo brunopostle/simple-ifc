@@ -146,7 +146,27 @@
       </requirements>
     </specification>
 
-    <specification name="(SCHED-2) Windows are named"
+    <specification name="(SCHED-2) Doors are named"
+                   description="All IfcDoor instances must have a Name. Door names appear in the BoQ Quantities column and construction schedule task descriptions."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <entity>
+          <name><simpleValue>IFCDOOR</simpleValue></name>
+        </entity>
+      </applicability>
+      <requirements>
+        <attribute>
+          <name><simpleValue>Name</simpleValue></name>
+          <value>
+            <xs:restriction base="xs:string">
+              <xs:pattern value=".+"/>
+            </xs:restriction>
+          </value>
+        </attribute>
+      </requirements>
+    </specification>
+
+    <specification name="(SCHED-3) Windows are named"
                    description="All IfcWindow instances must have a Name. Window names appear in the BoQ Quantities column and construction schedule task descriptions."
                    ifcVersion="IFC4">
       <applicability minOccurs="0">
@@ -166,7 +186,7 @@
       </requirements>
     </specification>
 
-    <specification name="(SCHED-3) Footings are named"
+    <specification name="(SCHED-4) Footings are named"
                    description="All IfcFooting instances must have a Name. Footing names appear in the BoQ Quantities column and construction schedule task descriptions."
                    ifcVersion="IFC4">
       <applicability minOccurs="0">
@@ -262,7 +282,40 @@
       </requirements>
     </specification>
 
-    <specification name="(BOQ-5) External roofs have thermal transmittance"
+    <specification name="(BOQ-5) External doors have thermal transmittance"
+                   description="All external doors must have ThermalTransmittance (U-value) in Pset_DoorCommon. The U-value drives the door and frame specification and unit rate in the BoQ 'Doors' cost item."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <property>
+          <propertySet><simpleValue>Pset_DoorCommon</simpleValue></propertySet>
+          <baseName><simpleValue>IsExternal</simpleValue></baseName>
+          <value><simpleValue>True</simpleValue></value>
+        </property>
+      </applicability>
+      <requirements>
+        <property>
+          <propertySet><simpleValue>Pset_DoorCommon</simpleValue></propertySet>
+          <baseName><simpleValue>ThermalTransmittance</simpleValue></baseName>
+        </property>
+      </requirements>
+    </specification>
+
+    <specification name="(BOQ-6) External doors have material assigned"
+                   description="All external doors must have a material assignment. Material is required to justify the door specification and unit rate in the BoQ."
+                   ifcVersion="IFC4">
+      <applicability minOccurs="0">
+        <property>
+          <propertySet><simpleValue>Pset_DoorCommon</simpleValue></propertySet>
+          <baseName><simpleValue>IsExternal</simpleValue></baseName>
+          <value><simpleValue>True</simpleValue></value>
+        </property>
+      </applicability>
+      <requirements>
+        <material/>
+      </requirements>
+    </specification>
+
+    <specification name="(BOQ-8) External roofs have thermal transmittance"
                    description="All external roofs must have ThermalTransmittance (U-value) in Pset_RoofCommon. The U-value drives the roof insulation specification and unit rate in the BoQ 'Pitched Roof Structure' cost item."
                    ifcVersion="IFC4">
       <applicability minOccurs="0">
