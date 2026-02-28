@@ -563,26 +563,23 @@ Key libraries:
 
 ### Appending a library type
 
-Use `ifc_edit("project.append_asset", ...)` via MCP if available. At the time of writing, the MCP coercion layer had no handler for `ifcopenshell.file`-typed parameters, so the `library` argument could not be passed through `ifc_edit` — this may have since been fixed in ifcedit/ifcmcp. If MCP does not work, fall back to Python:
+The `library` parameter is typed `file_path` — ifcmcp opens the file automatically from the path string. Use `ifc_edit` directly:
 
-```python
-import ifcopenshell, ifcopenshell.api.project, ifcopenshell.api.type
+```
+# 1. Find the element ID in the library file
+#    (load it temporarily, query, then reload your model)
+ifc_load("/usr/lib/python3.14/site-packages/bonsai/bim/data/libraries/IFC4 Landscape Library.ifc")
+ifc_select("IfcGeographicElementType")   # find the "Apple" entry and note its id
 
-LIB = '/usr/lib/python3.14/site-packages/bonsai/bim/data/libraries/IFC4 Landscape Library.ifc'
-f   = ifcopenshell.open('model.ifc')
-lib = ifcopenshell.open(LIB)
+# 2. Reload your model, then append the asset by library path + element id
+ifc_load("model.ifc")
+ifc_edit("project.append_asset", '{"library": "/usr/lib/python3.14/site-packages/bonsai/bim/data/libraries/IFC4 Landscape Library.ifc", "element": "<type_id_from_library>"}')
+# → returns the new type entity id in the active model
 
-# Find the type in the library
-apple_type_in_lib = next(t for t in lib.by_type('IfcGeographicElementType') if t.Name == 'Apple')
+# 3. Assign the type to an occurrence
+ifc_edit("type.assign_type", '{"related_objects": "<occurrence_id>", "relating_type": "<new_type_id>"}')
 
-# Copy into the model — returns the new type entity in f
-apple = ifcopenshell.api.project.append_asset(f, library=lib, element=apple_type_in_lib)
-
-# Assign to an occurrence
-tree = f.by_id(<tree_element_id>)
-ifcopenshell.api.type.assign_type(f, related_objects=[tree], relating_type=apple)
-
-f.write('model.ifc')
+ifc_save()
 ```
 
 `append_asset` copies all dependent geometry, materials, and styles. The occurrence keeps its own name, placement, and properties while getting the type's geometry.
