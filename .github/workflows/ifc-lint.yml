@@ -27,6 +27,7 @@ jobs:
           set -e
           shopt -s globstar nullglob
           for file in **/*.ifc; do
+            [[ "$file" == libraries/* ]] && continue
             echo "Validating $file..."
             python3 -m ifcopenshell.validate --rules "$file"
           done

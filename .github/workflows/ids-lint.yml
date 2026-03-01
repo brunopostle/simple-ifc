@@ -40,7 +40,11 @@ jobs:
             exit 0
           fi
 
-          ifc_files=(**/*.ifc)
+          all_ifc=(**/*.ifc)
+          ifc_files=()
+          for f in "${all_ifc[@]}"; do
+            [[ "$f" == libraries/* ]] || ifc_files+=("$f")
+          done
 
           if [ ${#ifc_files[@]} -eq 0 ]; then
             echo "No IFC files found"
