@@ -235,6 +235,107 @@ Batch parallel `ifc_info` calls to speed up traversal across many elements.
 
 ---
 
+## Custom Geometry with the Shape Builder
+
+`ifc_shape_list()` and `ifc_shape_docs(method)` expose `ShapeBuilder` — ifcopenshell's geometry construction API. `ifc_shape(method, params)` calls a ShapeBuilder method and returns the created entity's step ID.
+
+### Key methods
+
+| Method | Returns | Notes |
+|---|---|---|
+| `circle(center, radius)` | `IfcCircle` | 2D profile for round extrusions |
+| `rectangle(size, position)` | `IfcIndexedPolyCurve` | 2D rectangular polyline |
+| `profile(outer_curve, ...)` | `IfcArbitraryClosedProfileDef` | Wraps a curve as an area profile |
+| `extrude(profile_or_curve, magnitude, position, ...)` | `IfcExtrudedAreaSolid` | Curves auto-converted to profiles |
+| `block(position, x_length, y_length, z_length)` | `IfcBlock` | CSG primitive — **avoid mixing with SweptSolid items** |
+| `polyline(points, closed, ...)` | `IfcIndexedPolyCurve` | General 2D curve |
+| `get_representation(context, items)` | `IfcShapeRepresentation` | Bundles items into a representation |
+
+### Parameter coercion in `ifc_shape`
+
+- `entity_instance` params: pass as integer step ID (`7832`), string (`"7832"`), or `"#7832"`
+- `Sequence[entity_instance]` params (e.g. `items` in `get_representation`): pass as a **JSON list** of integer step IDs: `[7839, 7846, 7853]`
+- Vectors: JSON arrays `[1.0, 0.0, 0.0]`
+
+**Bug fixed in `ifcmcp/core.py`:** early versions didn't coerce `Sequence[entity_instance]` — `_coerce_shape_value` now handles `collections.abc.Sequence` origins, resolving each element to an entity.
+
+### Critical: `IfcShapeRepresentation` items must be homogeneous
+
+All items in one `IfcShapeRepresentation` must share the same representation type — mixing is a validation error:
+
+| Item type | RepresentationType |
+|---|---|
+| `IfcExtrudedAreaSolid` | `SweptSolid` |
+| `IfcBlock`, `IfcSphere` | `CSG` |
+| `IfcFacetedBrep` | `Brep` |
+
+**Prefer `rectangle` → `extrude` over `block`** so all items stay `SweptSolid`:
+
+```
+# CORRECT — rectangle profile extruded (SweptSolid, mixes safely with extruded legs)
+ifc_shape("rectangle", {"size": [1.4, 0.8], "position": [-0.7, -0.4]})  # → IfcIndexedPolyCurve
+ifc_shape("extrude", {"profile_or_curve": <id>, "magnitude": 0.04, "position": [0, 0, 0.72]})
+
+# WRONG — IfcBlock is CSG; mixing with SweptSolid legs fails validation
+ifc_shape("block", {"position": [-0.7, -0.4, 0.72], "x_length": 1.4, ...})
+```
+
+### Full recipe — custom shaped furniture with a type
+
+```
+# 1. Build geometry (all SweptSolid)
+ifc_shape("circle", {"center": [0, 0], "radius": 0.03})              # → circle_id
+ifc_shape("extrude", {"profile_or_curve": <circle_id>, "magnitude": 0.72, "position": [-0.6, -0.3, 0]})  # leg 1
+# ... 3 more legs at (+0.6,-0.3), (-0.6,+0.3), (+0.6,+0.3) ...
+ifc_shape("rectangle", {"size": [1.4, 0.8], "position": [-0.7, -0.4]})  # → rect_id
+ifc_shape("extrude", {"profile_or_curve": <rect_id>, "magnitude": 0.04, "position": [0, 0, 0.72]})  # tabletop
+
+# 2. Bundle into one representation
+ifc_shape("get_representation", {"context": 11, "items": [<leg1>, <leg2>, <leg3>, <leg4>, <tabletop>]})
+# → IfcShapeRepresentation (RepresentationType auto-set to "SweptSolid")
+
+# 3. Create type, assign representation to it
+ifc_edit("root.create_entity", '{"ifc_class": "IfcFurnitureType", "name": "dining table type", "predefined_type": "TABLE"}')
+ifc_edit("geometry.assign_representation", '{"product": "<type_id>", "representation": "<rep_id>"}')
+
+# 4. Create occurrence, set placement, container, then assign type (auto-maps geometry)
+ifc_edit("root.create_entity", '{"ifc_class": "IfcFurniture", "name": "dining table"}')
+ifc_edit("geometry.edit_object_placement", '{"product": "<furn_id>", "matrix": "[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]"}')
+ifc_edit("spatial.assign_container", '{"products": "<furn_id>", "relating_structure": "<space_id>"}')
+ifc_edit("type.assign_type", '{"related_objects": "<furn_id>", "relating_type": "<type_id>"}')
+# → creates IfcMappedItem on the occurrence pointing to the type's RepresentationMap
+
+ifc_validate()
+ifc_save()
+```
+
+### Swapping a type's representation
+
+When replacing the geometry on an already-typed element:
+
+```
+# 1. Build new geometry and assign to type
+ifc_shape(...)
+ifc_shape("get_representation", ...)  # → new_rep_id
+ifc_edit("geometry.assign_representation", '{"product": "<type_id>", "representation": "<new_rep_id>"}')
+
+# 2. Unassign old instance mapping and old type rep, then remove old rep
+ifc_edit("geometry.unassign_representation", '{"product": "<instance_id>", "representation": "<old_mapped_rep_id>"}')
+ifc_edit("geometry.unassign_representation", '{"product": "<type_id>", "representation": "<old_rep_id>"}')
+ifc_edit("geometry.remove_representation", '{"representation": "<old_rep_id>"}')
+
+# 3. Re-run assign_type to create a fresh MappedItem from the new type rep
+ifc_edit("type.assign_type", '{"related_objects": "<instance_id>", "relating_type": "<type_id>"}')
+
+# 4. Clean up orphans — calling assign_type a second time leaves the first MappedRepresentation
+#    orphaned (OfProductRepresentation=() AND RepresentationMap=() violates EXPRESS XOR constraint)
+ifc_validate(express_rules=True)   # reports orphaned rep by id
+ifc_edit("geometry.remove_representation", '{"representation": "<orphan_id>"}')
+# Note: removing one orphan may transitively delete related ones
+```
+
+---
+
 ## Quantity Take-Off (QTO)
 
 Run `ifc_quantify` to compute quantities. Results are written as `IfcElementQuantity` property sets on each element.
@@ -632,3 +733,5 @@ Add the driver to `.git/config` or `~/.gitconfig`:
 - **ISO 8601 durations** — task durations use `P5D` (5 days), `P1W` (1 week), `PT8H` (8 hours)
 - **Step IDs are file-specific** — never hard-code step IDs; always query first with `ifc_select`, `ifc_tree`, or `ifc_info`
 - **Space boundaries** — when adding, moving, or deleting windows and doors, check for `IfcRelSpaceBoundary` relationships that may also need updating
+- **Representation type homogeneity** — all items in one `IfcShapeRepresentation` must be the same type (SweptSolid, CSG, Brep, etc.); mixing causes a validation error. Use `rectangle` → `extrude` rather than `block` to keep everything `SweptSolid`
+- **Shape builder orphans** — after calling `type.assign_type` a second time, always run `ifc_validate(express_rules=True)` to catch orphaned `IfcShapeRepresentation` entities and remove them with `geometry.remove_representation`
