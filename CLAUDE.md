@@ -221,6 +221,65 @@ ifc_edit("geometry.assign_representation", '{"product": "<element_id>", "represe
 
 Note: the `polyline` parameter must be passed as a **JSON string** (not a bare array).
 
+### Wall mitre connections
+
+`geometry.connect_wall` + `geometry.regenerate_wall_representation` produce properly mitered wall ends where walls meet at corners. The workflow:
+
+```
+# 1. Add an Axis/Curve2D representation to each wall (context 23 = Plan/GRAPH_VIEW)
+#    axis is a list of 2D points [[x0,y0],[x1,y1]] in the wall's LOCAL frame
+ifc_edit("geometry.add_axis_representation", '{"context": "23", "axis": "[[0,0],[4.0,0]]"}')
+ifc_edit("geometry.assign_representation", '{"product": "<wall_id>", "representation": "<axis_rep_id>"}')
+
+# 2. Connect the walls (creates IfcRelConnectsPathElements)
+ifc_edit("geometry.connect_wall", '{"wall1": "<wall_a>", "wall2": "<wall_b>"}')
+
+# 3. Regenerate to compute miter cuts
+ifc_edit("geometry.regenerate_wall_representation", '{"wall": "<wall_id>", "length": "4.0", "height": "2.5"}')
+```
+
+`connect_wall` must be called for both orientations (A→B and B→A) for a two-wall corner. All connected walls must be regenerated.
+
+**CRITICAL: `regenerate_wall_representation` removes slope clippings.** Do not use it on walls with top-clipped (sloped) geometry.
+
+**For sloped walls needing a mitre**, use `ifc_shape` to bake the 45° cut into the 2D profile as a trapezoid, then apply the slope as a single `IfcHalfSpaceSolid` via `geometry.add_boolean`:
+
+```
+# South porch wall: mitre cuts from (1.9,0) to (1.57,0.33) at east end
+# → trapezoid profile: (0,0)→(1.9,0)→(1.57,0.33)→(0,0.33)
+ifc_shape("polyline", {"points": [[0,0],[1.9,0],[1.57,0.33],[0,0.33]], "closed": true})
+# → polyline_id
+ifc_shape("profile", {"outer_curve": <polyline_id>})                    # → profile_id
+ifc_shape("extrude", {"profile_or_curve": <profile_id>, "magnitude": 3.5, "position": [0,0,0]})
+# → extrusion_id
+ifc_shape("get_representation", {"context": 11, "items": [<extrusion_id>]})  # → rep_id (SweptSolid)
+
+# Create the slope half-space (normal points INTO the kept region below the slope)
+ifc_shape("plane", {"location": [0,0,3.26], "normal": [-0.419, 0, -0.908]})  # → plane_id
+ifc_shape("half_space_solid", {"plane": <plane_id>, "agreement_flag": false}) # → hss_id
+
+# Apply slope as boolean — moves extrusion out of rep top-level, adds BCR in its place
+ifc_edit("geometry.add_boolean", '{"first_item": "<extrusion_id>", "second_items": "<hss_id>"}')
+ifc_edit("attribute.edit_attributes", '{"product": "<rep_id>", "attributes": "{\"RepresentationType\": \"Clipping\"}"}')
+
+# Swap body rep
+ifc_edit("geometry.unassign_representation", '{"product": "<wall_id>", "representation": "<old_rep_id>"}')
+ifc_edit("geometry.remove_representation", '{"representation": "<old_rep_id>"}')
+ifc_edit("geometry.assign_representation", '{"product": "<wall_id>", "representation": "<rep_id>"}')
+```
+
+**Mitre trapezoid geometry** — for a wall with thickness `t=0.33`, mitre at the east end (local x=L):
+- `t_at_mitre = t` (both walls same thickness → 45°)
+- East-end mitre: profile points `(0,0)→(L,0)→(L−t, t)→(0,t)` (removes NE inner corner)
+- West-end mitre: profile points `(0,0)→(L,0)→(L,t)→(t,t)` (removes NW inner corner, closing from `(t,t)` to `(0,0)`)
+- For walls with origin at the mitre end: profile points `(0,0)→(L,0)→(L,t)→(t,t)` where x=0 is the mitre end
+
+**Slope normal** must point INTO the kept region (below slope = negative Z component):
+- Slope rising west→east: normal `[+0.419, 0, −0.908]` at location `[0, 0, z_at_x0]`
+- Slope falling west→east: normal `[−0.419, 0, −0.908]` at location `[0, 0, z_at_x0]`
+
+**Do NOT use dual `add_wall_representation` clippings** (two half-spaces: slope + mitre) — this produces incorrect geometry in viewers even though the IFC math is sound.
+
 ### Tracing geometry chains
 
 Walk entity references to find extrusion depths, clipping planes, etc.:
