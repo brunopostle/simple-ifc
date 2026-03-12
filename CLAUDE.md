@@ -242,7 +242,7 @@ ifc_edit("geometry.regenerate_wall_representation", '{"wall": "<wall_id>", "leng
 
 **CRITICAL: `regenerate_wall_representation` removes slope clippings.** Do not use it on walls with top-clipped (sloped) geometry.
 
-**For sloped walls needing a mitre**, use `ifc_shape` to bake the 45° cut into the 2D profile as a trapezoid, then apply the slope as a single `IfcHalfSpaceSolid` via `geometry.add_boolean`:
+**For sloped walls needing a mitre**, use `ifc_shape` to bake the 45° cut into the 2D profile as a trapezoid, then apply the slope via `geometry.clip_solid`:
 
 ```
 # South porch wall: mitre cuts from (1.9,0) to (1.57,0.33) at east end
@@ -254,12 +254,9 @@ ifc_shape("extrude", {"profile_or_curve": <profile_id>, "magnitude": 3.5, "posit
 # → extrusion_id
 ifc_shape("get_representation", {"context": 11, "items": [<extrusion_id>]})  # → rep_id (SweptSolid)
 
-# Create the slope half-space (normal points INTO the kept region below the slope)
-ifc_shape("plane", {"location": [0,0,3.26], "normal": [-0.419, 0, -0.908]})  # → plane_id
-ifc_shape("half_space_solid", {"plane": <plane_id>, "agreement_flag": false}) # → hss_id
-
-# Apply slope as boolean — moves extrusion out of rep top-level, adds BCR in its place
-ifc_edit("geometry.add_boolean", '{"first_item": "<extrusion_id>", "second_items": "<hss_id>"}')
+# Clip to slope — normal points toward the REMOVED material (above slope = positive Z)
+ifc_edit("geometry.clip_solid", '{"item": "<extrusion_id>", "location": [0,0,3.26], "normal": [0.419,0,0.908]}')
+# → BCR id; extrusion_id is now part of the BCR, not the rep top-level
 ifc_edit("attribute.edit_attributes", '{"product": "<rep_id>", "attributes": "{\"RepresentationType\": \"Clipping\"}"}')
 
 # Swap body rep
@@ -274,9 +271,14 @@ ifc_edit("geometry.assign_representation", '{"product": "<wall_id>", "representa
 - West-end mitre: profile points `(0,0)→(L,0)→(L,t)→(t,t)` (removes NW inner corner, closing from `(t,t)` to `(0,0)`)
 - For walls with origin at the mitre end: profile points `(0,0)→(L,0)→(L,t)→(t,t)` where x=0 is the mitre end
 
-**Slope normal** must point INTO the kept region (below slope = negative Z component):
-- Slope rising west→east: normal `[+0.419, 0, −0.908]` at location `[0, 0, z_at_x0]`
-- Slope falling west→east: normal `[−0.419, 0, −0.908]` at location `[0, 0, z_at_x0]`
+**Slope normal for `geometry.clip_solid`** must point INTO the REMOVED region (above the slope = positive Z component). This is the same convention as the `clippings` parameter of `add_wall_representation`.
+
+> ⚠️ This convention is counter-intuitive: **normal → removed material** (not toward the kept material).
+
+- Slope falling west→east (high at x=0): normal `[+0.419, 0, +0.908]` at location `[0, 0, z_high]`
+- Slope rising west→east (low at x=0): normal `[−0.419, 0, +0.908]` at location `[0, 0, z_low]`
+
+The Z component is always **positive** (pointing upward, toward the removed material above the slope).
 
 **Do NOT use dual `add_wall_representation` clippings** (two half-spaces: slope + mitre) — this produces incorrect geometry in viewers even though the IFC math is sound.
 
