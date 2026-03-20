@@ -170,6 +170,8 @@ Windows and doors have multiple relationships that must all be cleaned up:
 
 `root.remove_product` is a smart delete — removes the entity plus all its relationships (geometry, placement, properties, materials, containment, type assignments, space boundaries). The IfcOpeningElement must be removed separately.
 
+Alternatively, `feature.remove_feature` permanently deletes an IfcOpeningElement and its void relationship in one call. Any fillings still present become orphaned and must be removed first via `root.remove_product`.
+
 **Verify no orphaned openings remain:**
 ```
 ifc_relations(<wall_id>)     # → check children.openings for unfilled IfcOpeningElements
@@ -183,6 +185,14 @@ ifc_edit("geometry.edit_object_placement", '{"product": "<opening_id>", "matrix"
 ```
 
 Always move the IfcOpeningElement to the same position as the window/door. Also check `IfcRelSpaceBoundary` entities — their geometry may need updating if the window moves between spaces or changes boundary.
+
+### Moving an assembly
+
+When moving an assembly (roof, furniture group, or any element with nested children) and you want all children to travel with it, pass `"should_transform_children": "true"`. The default is `"false"`, which rewrites each child's local placement to preserve its current world position — the parent moves but the children stay where they are.
+
+```
+ifc_edit("geometry.edit_object_placement", '{"product": "<assembly_id>", "matrix": [[...],[...],[...],[0,0,0,1]], "should_transform_children": "true"}')
+```
 
 ### Changing element types
 
