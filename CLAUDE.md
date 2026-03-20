@@ -452,8 +452,11 @@ ifc_edit("sequence.add_task", '{"work_schedule": "<sched_id>", "name": "Foundati
 # Leaf tasks
 ifc_edit("sequence.add_task", '{"parent_task": "<phase_id>", "name": "Install Ground Beams", "identification": "P1.1", "predefined_type": "CONSTRUCTION"}')
 
-# Assign physical elements to tasks
-ifc_edit("sequence.assign_process", '{"relating_process": "<task_id>", "related_object": "<element_id>"}')
+# Assign physical elements to tasks as OUTPUTS (things being constructed/produced)
+# CRITICAL: use assign_product NOT assign_process for construction tasks.
+# assign_process = input (material consumed/demolished) → Bonsai animator crashes on CONSTRUCTION type
+# assign_product = output (element produced) → correct for all CONSTRUCTION tasks
+ifc_edit("sequence.assign_product", '{"relating_product": "<element_id>", "related_object": "<task_id>"}')
 
 # Sequence relationships between phases/tasks
 ifc_edit("sequence.assign_sequence", '{"relating_process": "<pred_id>", "related_process": "<succ_id>", "sequence_type": "FINISH_START"}')
