@@ -29,6 +29,7 @@ The MCP server is configured in `.mcp.json`. In Claude Code it loads automatical
 | `IDS/` | IDS specification files for CI validation |
 | `IDS/CI_project_checks.ids` | Project CI checks: QTO completeness, element naming, BoQ properties |
 | `IDS/EN_Basic IDM Check.ids` | Standard BIM Basic IDM checks |
+| `libraries/` | Local copies of Bonsai asset libraries (furniture, landscape) |
 | `CLAUDE.md` | Instructions and reference for the LLM agent |
 
 ## Validation
